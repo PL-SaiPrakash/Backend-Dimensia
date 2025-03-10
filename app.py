@@ -7,7 +7,8 @@ import subprocess
 import shutil
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})  # Allow frontend requests
+
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 UPLOAD_FOLDER = "uploads"
 CONVERTED_FOLDER = "converted"
@@ -26,9 +27,7 @@ def allowed_file(filename):
 
 def secure_filename(filename):
     """Create a secure version of a filename"""
-
     file_ext = pathlib.Path(filename).suffix.lower()
-
     return f"{uuid.uuid4()}{file_ext}"
 
 @app.route("/upload", methods=["POST"])
@@ -50,7 +49,7 @@ def upload_file():
     try:
         file.save(filepath)
         return jsonify({
-            "url": f"http://localhost:5000/uploads/{unique_filename}",
+            "url": f"/uploads/{unique_filename}",
             "original_filename": original_filename
         }), 200
     except Exception as e:
@@ -72,47 +71,39 @@ def convert_file():
         if not os.path.exists(input_path):
             return jsonify({"error": "File not found"}), 404
 
-     
         file_ext = pathlib.Path(original_filename).suffix.lower()
-        
-  
+
         if file_ext.lower() == '.obj':
             return jsonify({"error": "File is already in OBJ format"}), 400
-
 
         original_name_without_ext = os.path.splitext(original_filename)[0]
         converted_filename = secure_filename(f"{original_name_without_ext}.obj")
         output_path = os.path.join(app.config["CONVERTED_FOLDER"], converted_filename)
 
-     
         if file_ext.lower() == '.stl':
             try:
-               
                 import pymeshlab
                 ms = pymeshlab.MeshSet()
                 ms.load_new_mesh(input_path)
                 ms.save_current_mesh(output_path)
             except ImportError:
-                
                 try:
-                   
                     subprocess.run([
                         'meshlabserver', 
                         '-i', input_path, 
                         '-o', output_path
                     ], check=True)
                 except (subprocess.SubprocessError, FileNotFoundError):
-                   
                     shutil.copy(input_path, output_path)
                     return jsonify({
-                        "converted_url": f"http://localhost:5000/converted/{converted_filename}",
+                        "converted_url": f"/converted/{converted_filename}",
                         "warning": "Actual conversion not performed - you need to install pymeshlab or meshlabserver"
                     }), 200
         else:
             return jsonify({"error": f"Conversion from {file_ext} to OBJ is not supported"}), 400
 
         return jsonify({
-            "converted_url": f"http://localhost:5000/converted/{converted_filename}"
+            "converted_url": f"/converted/{converted_filename}"
         }), 200
 
     except Exception as e:
@@ -127,4 +118,5 @@ def converted_file(filename):
     return send_from_directory(app.config["CONVERTED_FOLDER"], filename, as_attachment=True)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))  
+    app.run(host="0.0.0.0", port=port)
