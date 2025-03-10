@@ -7,8 +7,9 @@ import subprocess
 import shutil
 
 app = Flask(__name__)
-
-CORS(app, resources={r"/*": {"origins": "*"}})
+# Update CORS to accept requests from your production frontend URL
+# For development, you can use * to allow all origins temporarily
+CORS(app, resources={r"/*": {"origins": "*"}})  
 
 UPLOAD_FOLDER = "uploads"
 CONVERTED_FOLDER = "converted"
@@ -16,6 +17,8 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["CONVERTED_FOLDER"] = CONVERTED_FOLDER
 ALLOWED_EXTENSIONS = {'.stl', '.obj'}
 
+# Get the base URL from environment or default to localhost for development
+BASE_URL = os.environ.get('BASE_URL', 'http://localhost:5000')
 
 for folder in [UPLOAD_FOLDER, CONVERTED_FOLDER]:
     if not os.path.exists(folder):
@@ -49,7 +52,7 @@ def upload_file():
     try:
         file.save(filepath)
         return jsonify({
-            "url": f"/uploads/{unique_filename}",
+            "url": f"{BASE_URL}/uploads/{unique_filename}",
             "original_filename": original_filename
         }), 200
     except Exception as e:
@@ -72,7 +75,7 @@ def convert_file():
             return jsonify({"error": "File not found"}), 404
 
         file_ext = pathlib.Path(original_filename).suffix.lower()
-
+        
         if file_ext.lower() == '.obj':
             return jsonify({"error": "File is already in OBJ format"}), 400
 
@@ -82,11 +85,13 @@ def convert_file():
 
         if file_ext.lower() == '.stl':
             try:
+                # First try with pymeshlab
                 import pymeshlab
                 ms = pymeshlab.MeshSet()
                 ms.load_new_mesh(input_path)
                 ms.save_current_mesh(output_path)
             except ImportError:
+                # Fallback to meshlabserver
                 try:
                     subprocess.run([
                         'meshlabserver', 
@@ -94,16 +99,17 @@ def convert_file():
                         '-o', output_path
                     ], check=True)
                 except (subprocess.SubprocessError, FileNotFoundError):
+                    # Last resort: just copy the file
                     shutil.copy(input_path, output_path)
                     return jsonify({
-                        "converted_url": f"/converted/{converted_filename}",
+                        "converted_url": f"{BASE_URL}/converted/{converted_filename}",
                         "warning": "Actual conversion not performed - you need to install pymeshlab or meshlabserver"
                     }), 200
         else:
             return jsonify({"error": f"Conversion from {file_ext} to OBJ is not supported"}), 400
 
         return jsonify({
-            "converted_url": f"/converted/{converted_filename}"
+            "converted_url": f"{BASE_URL}/converted/{converted_filename}"
         }), 200
 
     except Exception as e:
@@ -117,6 +123,12 @@ def uploaded_file(filename):
 def converted_file(filename):
     return send_from_directory(app.config["CONVERTED_FOLDER"], filename, as_attachment=True)
 
+# Add a health check endpoint for Render
+@app.route("/health")
+def health_check():
+    return jsonify({"status": "ok"}), 200
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  
-    app.run(host="0.0.0.0", port=port)
+    # Use environment port if available (Render will provide this)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
