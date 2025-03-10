@@ -18,7 +18,7 @@ app.config["CONVERTED_FOLDER"] = CONVERTED_FOLDER
 ALLOWED_EXTENSIONS = {'.stl', '.obj'}
 
 # Get the base URL from environment or default to localhost for development
-BASE_URL = os.environ.get('BASE_URL', 'http://localhost:5000')
+BASE_URL = os.environ.get('BASE_URL', 'https://backend-dimensia.onrender.com')
 
 for folder in [UPLOAD_FOLDER, CONVERTED_FOLDER]:
     if not os.path.exists(folder):
