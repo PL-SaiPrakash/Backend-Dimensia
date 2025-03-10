@@ -9,7 +9,7 @@ import shutil
 app = Flask(__name__)
 # Update CORS to accept requests from your production frontend URL
 # For development, you can use * to allow all origins temporarily
-CORS(app, resources={r"/*": {"origins": "*"}})  
+CORS(app)  
 
 UPLOAD_FOLDER = "uploads"
 CONVERTED_FOLDER = "converted"
